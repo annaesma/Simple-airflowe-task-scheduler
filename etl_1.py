@@ -1,0 +1,79 @@
+from airflow import dag
+from datetime import timedelta
+
+from airflow.operators.python_operator import PythonOperator
+from airflow.operators.postgres_operator import PostgresOperator
+import psycopg2
+postgres_connection = psycopg2.connect("host=localhost dbname=installs user=postgres")
+import csv
+
+
+default_args={
+"owner"="esma",
+"depends_on_past":False,
+"start_date": datetime(2019,02,10),
+"email":"esma.dzakmic1@gmail.com",
+"email_on_failure":True,
+"retry_delay":timedelta(minutes=1),
+ "schedule_interval":"@daily"}
+with dag("postgres_databse",default_args=default_args) as dag:
+    Task_I=PostgresOperator(
+        task_id="create table",
+        postgres_conn_id="postgres_connection",
+        database="installs",
+    sql="""
+    drop table if exist public.installs_1;
+    create table public.installs_3
+    (country text,created_at date,paid boolean,installs int)"""
+    )
+    Task_II=PostgresOperator(
+        task_id="load_csv",python_callable=load_csv
+
+    )
+    Task_III=PostgresOperator(
+        task_id="fdw",
+        postgres_conn_id="postgres_connection",
+        database="installs",
+        sql=""""CREATE EXTENSION postgres_fdw;
+CREATE SERVER esma 
+ FOREIGN DATA WRAPPER postgres_fdw
+ OPTIONS (dbname 'installs_3', host 'localhost', port '5432');
+ CREATE USER MAPPING FOR postgres
+SERVER esma
+OPTIONS (user 'postgres', password 'Anna0402');
+
+import foreign schema public from server esma into public;
+
+CREATE SERVER postgres 
+ FOREIGN DATA WRAPPER postgres_fdw
+ OPTIONS (dbname 'installs_2', host 'localhost', port '5432');
+ CREATE USER MAPPING FOR postgres
+SERVER postgres
+OPTIONS (user 'postgres', password 'Anna0402');
+
+import foreign schema public from server postgres into public;"""
+
+    )
+    Task_IV=PostgresOperator(
+        task_id="querry",
+        postgres_conn_id="postgres_connection",
+        database="installs",
+        sql=""""
+        select country,count(*) from installs where paid=True and created_at::text like '2019-05-% 
+        group by country
+        """
+    )
+
+Task_I >> Task_II >> Task_III >> Task_III
+
+def load_csv():
+    cur = postgres_connection.cursor()
+    with open('shard1.csv') as f:
+        reader=scv.reader(f)
+    for row in reader:
+        cur.execute(
+             "insert into installs values(%s.%s,%s,%s)",
+            row
+            )
+
+    con.commit()
